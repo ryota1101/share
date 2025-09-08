@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: multi-llm-chat-db
+    environment:
+      POSTGRES_DB: multi_llm_chat
+      POSTGRES_USER: chatuser
+      POSTGRES_PASSWORD: chatpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - multi-llm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatuser -d multi_llm_chat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flask Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: multi-llm-chat-backend
+    environment:
+      - DATABASE_URL=postgresql://chatuser:chatpassword@db:5432/multi_llm_chat
+      - FLASK_ENV=development
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - GCP_GEMINI_API_KEY=${GCP_GEMINI_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - CORS_ORIGINS=http://localhost:3000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - ./config:/app/config
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - multi-llm-network
+    command: python app.py
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: multi-llm-chat-frontend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:5000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    networks:
+      - multi-llm-network
+    command: npm run dev
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  multi-llm-network:
+    driver: bridge
