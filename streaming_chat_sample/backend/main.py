@@ -24,7 +24,7 @@ def load_text_file(filepath: str) -> str:
 
 
 # 非同期ジェネレータでテキストをチャンクに分けて返す
-async def stream_text(filepath: str, chunk_size: int = 30, delay: float = 0.1):
+async def stream_text(filepath: str, chunk_size: int = 20, delay: float = 0.1):
     text = load_text_file(filepath)
     for i in range(0, len(text), chunk_size):
         chunk = text[i : i + chunk_size]
